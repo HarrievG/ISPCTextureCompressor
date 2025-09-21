@@ -116,6 +116,7 @@ Notes:
 */
 
 extern "C" void CompressBlocksBC1(const rgba_surface* src, uint8_t* dst);
+extern "C" void CompressBlocksBC2(const rgba_surface* src, uint8_t* dst);
 extern "C" void CompressBlocksBC3(const rgba_surface* src, uint8_t* dst);
 extern "C" void CompressBlocksBC4(const rgba_surface* src, uint8_t* dst);
 extern "C" void CompressBlocksBC5(const rgba_surface* src, uint8_t* dst);
