@@ -153,6 +153,10 @@ else()
         ${CMAKE_CURRENT_SOURCE_DIR}/ispc_texcomp
     )
 
+    # Find Vulkan for BC compression format enums
+    find_package(Vulkan REQUIRED)
+    target_include_directories(ISPCTextureCompressor PUBLIC ${Vulkan_INCLUDE_DIRS})
+
     # Define macro to indicate fallback mode
     target_compile_definitions(ISPCTextureCompressor PUBLIC ISPC_FALLBACK_MODE)
 endif()

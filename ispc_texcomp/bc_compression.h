@@ -4,7 +4,7 @@
 #include <vector>
 #include <algorithm>
 #include <cmath>
-#include "vulkan/vulkan.h"
+#include <vulkan/vulkan.h>
 
 namespace bc {
 
@@ -87,7 +87,27 @@ inline void encodeBC1Block(const uint8_t* rgba, uint8_t* block, int stride) {
     block[7] = (indices >> 24) & 0xFF;
 }
 
-// Simple BC3 block encoder (BC1 color + explicit alpha)
+// Simple BC2 block encoder (explicit 4-bit alpha + BC1 color)
+inline void encodeBC2Block(const uint8_t* rgba, uint8_t* block, int stride) {
+    // Alpha block (first 8 bytes) - 4 bits per pixel
+    for (int y = 0; y < 4; y++) {
+        uint16_t row = 0;
+        for (int x = 0; x < 4; x++) {
+            const uint8_t* pixel = rgba + (y * stride + x * 4);
+            uint8_t alpha = pixel[3];
+            // Convert 8-bit alpha to 4-bit
+            uint8_t alpha4 = alpha >> 4;
+            row |= (alpha4 << (x * 4));
+        }
+        block[y * 2] = row & 0xFF;
+        block[y * 2 + 1] = (row >> 8) & 0xFF;
+    }
+
+    // Color block (last 8 bytes) - use BC1 encoding
+    encodeBC1Block(rgba, block + 8, stride);
+}
+
+// Simple BC3 block encoder (interpolated alpha + BC1 color)
 inline void encodeBC3Block(const uint8_t* rgba, uint8_t* block, int stride) {
     // Alpha block (first 8 bytes)
     uint8_t minA = 255, maxA = 0;
@@ -155,6 +175,10 @@ inline std::vector<uint8_t> compressToBC(VkFormat format, const uint8_t* rgbaDat
 
         case VK_FORMAT_BC2_UNORM_BLOCK:
         case VK_FORMAT_BC2_SRGB_BLOCK:
+            blockSize = 16;
+            // BC2 will use its own encoder
+            break;
+
         case VK_FORMAT_BC3_UNORM_BLOCK:
         case VK_FORMAT_BC3_SRGB_BLOCK:
             blockSize = 16;
@@ -201,8 +225,10 @@ inline std::vector<uint8_t> compressToBC(VkFormat format, const uint8_t* rgbaDat
             }
 
             // Encode the block
-            if (useBC3) {
-                encodeBC3Block(blockRGBA, blockDst, 16);  // 4 pixels * 4 bytes = 16 byte stride
+            if (format == VK_FORMAT_BC2_UNORM_BLOCK || format == VK_FORMAT_BC2_SRGB_BLOCK) {
+                encodeBC2Block(blockRGBA, blockDst, 16);  // 4 pixels * 4 bytes = 16 byte stride
+            } else if (useBC3) {
+                encodeBC3Block(blockRGBA, blockDst, 16);
             } else {
                 encodeBC1Block(blockRGBA, blockDst, 16);
             }

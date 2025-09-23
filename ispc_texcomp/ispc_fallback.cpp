@@ -3,18 +3,41 @@
 
 #include "ispc_texcomp.h"
 #include <cstring>
+#include <vector>
+#include "bc_compression.h"
 
-// Stub implementations that do nothing (will use our bc_compression.h instead)
+// Fallback implementations using our bc_compression.h
 void CompressBlocksBC1(const rgba_surface* src, uint8_t* dst) {
-    // Stub - compression handled in vulkan_renderer.cpp
+#ifdef ISPC_FALLBACK_MODE
+    // Use the simple BC1 encoder from bc_compression.h
+    std::vector<uint8_t> compressed = bc::compressToBC(
+        VK_FORMAT_BC1_RGB_UNORM_BLOCK, src->ptr, src->width, src->height);
+    if (!compressed.empty()) {
+        memcpy(dst, compressed.data(), compressed.size());
+    }
+#endif
 }
 
 void CompressBlocksBC2(const rgba_surface* src, uint8_t* dst) {
-    // Stub
+#ifdef ISPC_FALLBACK_MODE
+    // Use the simple BC2 encoder from bc_compression.h
+    std::vector<uint8_t> compressed = bc::compressToBC(
+        VK_FORMAT_BC2_UNORM_BLOCK, src->ptr, src->width, src->height);
+    if (!compressed.empty()) {
+        memcpy(dst, compressed.data(), compressed.size());
+    }
+#endif
 }
 
 void CompressBlocksBC3(const rgba_surface* src, uint8_t* dst) {
-    // Stub
+#ifdef ISPC_FALLBACK_MODE
+    // Use the simple BC3 encoder from bc_compression.h
+    std::vector<uint8_t> compressed = bc::compressToBC(
+        VK_FORMAT_BC3_UNORM_BLOCK, src->ptr, src->width, src->height);
+    if (!compressed.empty()) {
+        memcpy(dst, compressed.data(), compressed.size());
+    }
+#endif
 }
 
 void CompressBlocksBC4(const rgba_surface* src, uint8_t* dst) {
