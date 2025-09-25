@@ -53,7 +53,6 @@ struct bc6h_enc_settings
     int refineIterations_1p;
     int refineIterations_2p;
     int fastSkipTreshold;
-    bool is_signed;  // For BC6H_SFLOAT vs BC6H_UFLOAT
 };
 
 struct etc_enc_settings
