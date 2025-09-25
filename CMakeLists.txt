@@ -3,19 +3,28 @@ cmake_minimum_required(VERSION 3.10)
 project(ISPCTextureCompressor)
 
 # Find ISPC compiler - try multiple locations
-set(ISPC_EXECUTABLE "ISPC_EXECUTABLE-NOTFOUND")  # Force to not found for fallback testing
-# find_program(ISPC_EXECUTABLE
-#     NAMES ispc
-#     PATHS
-#     ${CMAKE_CURRENT_SOURCE_DIR}/../ispc_compiler/bin
-#     ${CMAKE_CURRENT_SOURCE_DIR}/../../external/ispc_compiler/bin
-#     /usr/local/bin
-#     /opt/homebrew/bin
-# )
+find_program(ISPC_EXECUTABLE
+    NAMES ispc
+    HINTS
+      ${CMAKE_CURRENT_SOURCE_DIR}/../ispc_compiler/bin
+      ${CMAKE_CURRENT_SOURCE_DIR}/../../external/ispc_compiler/bin
+      /opt/homebrew/bin
+      /usr/local/bin
+      /usr/bin
+    PATHS
+      $ENV{PATH}
+)
 
 if(ISPC_EXECUTABLE)
     # ISPC compiler found - use full implementation
     message(STATUS "Found ISPC compiler: ${ISPC_EXECUTABLE}")
+
+    # Prefer a vendored compiler if present in project tree (consistent toolchain)
+    # If no vendored compiler, keep the found one; otherwise prefer vendored
+    if(EXISTS "${CMAKE_SOURCE_DIR}/external/ispc_compiler/bin/ispc")
+        set(ISPC_EXECUTABLE "${CMAKE_SOURCE_DIR}/external/ispc_compiler/bin/ispc")
+        message(STATUS "Using vendored ISPC compiler: ${ISPC_EXECUTABLE}")
+    endif()
 
     # Set ISPC flags based on architecture
     if(ANDROID)

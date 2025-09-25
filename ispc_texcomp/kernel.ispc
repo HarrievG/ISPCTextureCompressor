@@ -2140,6 +2140,7 @@ struct bc6h_enc_settings
     int refineIterations_1p;
     int refineIterations_2p;
     int fastSkipTreshold;
+    bool is_signed;  // For BC6H_SFLOAT vs BC6H_UFLOAT
 };
 
 struct bc6h_enc_state
@@ -2163,6 +2164,7 @@ struct bc6h_enc_state
     uniform int refineIterations_1p;
     uniform int refineIterations_2p;
     uniform int fastSkipTreshold;
+    uniform bool is_signed;
 };
 
 void bc6h_code_2p(uint32 data[5], int pqep[], uint32 qblock[2], int part_id, int mode);
@@ -3135,11 +3137,13 @@ void bc6h_setup(bc6h_enc_state state[])
         state->rgb_bounds[3+p] = 0;
     }
 
-    // uf16 conversion, min/max
+    // uf16/sf16 conversion, min/max
+    // Use different multiplier for signed vs unsigned BC6H
+    uniform float multiplier = state->is_signed ? 32 : 64;
     for (uniform int p = 0; p < 3; p++)
     for (uniform int k = 0; k < 16; k++)
     {
-        state->block[p * 16 + k] = (state->block[p * 16 + k] / 31) * 64;
+        state->block[p * 16 + k] = (state->block[p * 16 + k] / 31) * multiplier;
 
         state->rgb_bounds[p  ] = min(state->rgb_bounds[p  ], state->block[p * 16 + k]);
         state->rgb_bounds[3+p] = max(state->rgb_bounds[3+p], state->block[p * 16 + k]);
@@ -3207,6 +3211,7 @@ void bc6h_enc_copy_settings(bc6h_enc_state state[], uniform bc6h_enc_settings se
     state->fastSkipTreshold = settings->fastSkipTreshold;
     state->refineIterations_1p = settings->refineIterations_1p;
     state->refineIterations_2p = settings->refineIterations_2p;
+    state->is_signed = settings->is_signed;
 }
 
 inline void CompressBlockBC6H(uniform rgba_surface src[], int xx, uniform int yy, uniform uint8 dst[], uniform bc6h_enc_settings settings[])
