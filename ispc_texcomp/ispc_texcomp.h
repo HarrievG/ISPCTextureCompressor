@@ -53,6 +53,7 @@ struct bc6h_enc_settings
     int refineIterations_1p;
     int refineIterations_2p;
     int fastSkipTreshold;
+    bool is_signed;  // For BC6H_SFLOAT vs BC6H_UFLOAT
 };
 
 struct etc_enc_settings
@@ -119,7 +120,9 @@ extern "C" void CompressBlocksBC1(const rgba_surface* src, uint8_t* dst);
 extern "C" void CompressBlocksBC2(const rgba_surface* src, uint8_t* dst);
 extern "C" void CompressBlocksBC3(const rgba_surface* src, uint8_t* dst);
 extern "C" void CompressBlocksBC4(const rgba_surface* src, uint8_t* dst);
+extern "C" void CompressBlocksBC4_SNORM(const rgba_surface* src, uint8_t* dst);
 extern "C" void CompressBlocksBC5(const rgba_surface* src, uint8_t* dst);
+extern "C" void CompressBlocksBC5_SNORM(const rgba_surface* src, uint8_t* dst);
 extern "C" void CompressBlocksBC6H(const rgba_surface* src, uint8_t* dst, bc6h_enc_settings* settings);
 extern "C" void CompressBlocksBC7(const rgba_surface* src, uint8_t* dst, bc7_enc_settings* settings);
 extern "C" void CompressBlocksETC1(const rgba_surface* src, uint8_t* dst, etc_enc_settings* settings);

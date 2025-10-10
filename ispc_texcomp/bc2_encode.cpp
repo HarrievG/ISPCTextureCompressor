@@ -4,6 +4,7 @@
 #include "ispc_texcomp.h"
 #include <cstring>
 #include <algorithm>
+#include <cstdint>
 
 extern "C" void CompressBlocksBC1(const rgba_surface* src, uint8_t* dst);
 
@@ -37,8 +38,8 @@ extern "C" void CompressBlocksBC2(const rgba_surface* src, uint8_t* dst)
                         alpha = pixel[3];
                     }
 
-                    // Quantize to 4 bits and pack
-                    uint8_t alpha_4bit = (alpha >> 4) & 0x0F;
+                    // Quantize to 4 bits with proper rounding (DirectX spec)
+                    uint8_t alpha_4bit = (alpha * 15 + 127) / 255;
                     alpha_row |= (alpha_4bit << (x * 4));
                 }
                 // Store as little-endian

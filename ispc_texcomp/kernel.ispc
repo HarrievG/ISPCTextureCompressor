@@ -168,36 +168,28 @@ inline void load_block_interleaved_16bit(float block[48], uniform rgba_surface* 
 
 inline void load_block_r_8bit(float block[16], uniform rgba_surface* uniform src, int xx, uniform int yy)
 {
+	// Fixed: Handle RGBA input format where R is at offset 0 of each 4-byte pixel
 	for (uniform int y=0; y<4; y++)
+	for (uniform int x=0; x<4; x++)
 	{
-		uniform unsigned int32* uniform src_ptr = (unsigned int32*)&src->ptr[(yy*4+y)*src->stride];
-		unsigned int32 rrrr = gather_uint(src_ptr, xx);
-
-		block[y*4+0] = (int)((rrrr>> 0)&255);
-		block[y*4+1] = (int)((rrrr>> 8)&255);
-		block[y*4+2] = (int)((rrrr>>16)&255);
-		block[y*4+3] = (int)((rrrr>>24)&255);
+		uniform uint8* uniform src_ptr = (uniform uint8*)&src->ptr[(yy*4+y)*src->stride];
+		// Each pixel is RGBA (4 bytes), we want R channel at offset 0
+		int pixel_idx = (xx*4 + x) * 4;
+		block[y*4+x] = (float)src_ptr[pixel_idx];
 	}
 }
 
 inline void load_block_interleaved_rg_8bit(float block[32], uniform rgba_surface* uniform src, int xx, uniform int yy)
 {
+	// Fixed: Handle RGBA input format where R is at offset 0, G at offset 1
 	for (uniform int y=0; y<4; y++)
+	for (uniform int x=0; x<4; x++)
 	{
-		uniform unsigned int32* uniform src_ptr = (unsigned int32*)&src->ptr[(yy*4+y)*src->stride];
-		unsigned int32 rgrg0 = gather_uint(src_ptr, xx * 2 + 0);
-        unsigned int32 rgrg1 = gather_uint(src_ptr, xx * 2 + 1);
-
-        // r
-		block[16*0+y*4+0] = (int)((rgrg0>> 0)&255);
-		block[16*0+y*4+1] = (int)((rgrg0>>16)&255);
-		block[16*0+y*4+2] = (int)((rgrg1>> 0)&255);
-		block[16*0+y*4+3] = (int)((rgrg1>>16)&255);
-        // g
-		block[16*1+y*4+0] = (int)((rgrg0>> 8)&255);
-		block[16*1+y*4+1] = (int)((rgrg0>>24)&255);
-		block[16*1+y*4+2] = (int)((rgrg1>> 8)&255);
-		block[16*1+y*4+3] = (int)((rgrg1>>24)&255);
+		uniform uint8* uniform src_ptr = (uniform uint8*)&src->ptr[(yy*4+y)*src->stride];
+		// Each pixel is RGBA (4 bytes), we want R at offset 0 and G at offset 1
+		int pixel_idx = (xx*4 + x) * 4;
+		block[y*4+x] = (float)src_ptr[pixel_idx];         // R channel
+		block[16 + y*4+x] = (float)src_ptr[pixel_idx+1];  // G channel
 	}
 }
 
@@ -705,6 +697,160 @@ export void CompressBlocksBC5_ispc(uniform rgba_surface src[], uniform uint8 dst
 	{
 		CompressBlockBC5(src, xx, yy, dst);
 	}
+}
+
+// SNORM support functions for BC4/BC5
+inline void load_block_r_8bit_snorm(int8 block[16], uniform rgba_surface* uniform src, int xx, uniform int yy)
+{
+    uniform int8* uniform src_ptr = (uniform int8*)src->ptr;
+    int start_x = xx * 4;
+    uniform int start_y = yy * 4;
+
+    for (uniform int y = 0; y < 4; y++)
+    {
+        for (uniform int x = 0; x < 4; x++)
+        {
+            int pixel_offset = ((start_y + y) * src->width + (start_x + x)) * 4;
+            block[y * 4 + x] = src_ptr[pixel_offset];
+        }
+    }
+}
+
+inline void load_block_rg_8bit_snorm(int8 block[32], uniform rgba_surface* uniform src, int xx, uniform int yy)
+{
+    uniform int8* uniform src_ptr = (uniform int8*)src->ptr;
+    int start_x = xx * 4;
+    uniform int start_y = yy * 4;
+
+    for (uniform int y = 0; y < 4; y++)
+    {
+        for (uniform int x = 0; x < 4; x++)
+        {
+            int pixel_offset = ((start_y + y) * src->width + (start_x + x)) * 4;
+            block[y * 4 + x] = src_ptr[pixel_offset];
+            block[16 + (y * 4 + x)] = src_ptr[pixel_offset + 1];
+        }
+    }
+}
+
+// BC4 SNORM compression - handles signed data [-128,127]
+inline void CompressBlockBC4_SNORM_alpha(int8 block[16], uint32 data[2])
+{
+    // Find min/max values
+    int8 minVal = block[0];
+    int8 maxVal = block[0];
+    for (uniform int i = 1; i < 16; ++i)
+    {
+        minVal = min(minVal, block[i]);
+        maxVal = max(maxVal, block[i]);
+    }
+
+    // Remap -128 to -127 per DirectXTex
+    if (minVal == -128) minVal = -127;
+    if (maxVal == -128) maxVal = -127;
+
+    // For better quality, put larger magnitude first
+    int8 ep0 = maxVal;
+    int8 ep1 = minVal;
+
+    // Generate palette and indices
+    uint64 indices = 0;
+
+    if (ep0 > ep1)  // Signed comparison for mode selection
+    {
+        // 8-value interpolation mode
+        int8 palette[8];
+        palette[0] = ep0;
+        palette[1] = ep1;
+        for (uniform int i = 2; i < 8; ++i)
+        {
+            int val = ((8 - i) * (int)ep0 + (i - 1) * (int)ep1) / 7;
+            palette[i] = clamp(val, -127, 127);
+        }
+
+        for (uniform int i = 0; i < 16; ++i)
+        {
+            int8 val = (block[i] == -128) ? -127 : block[i];
+            int bestIdx = 0;
+            int minDist = abs(val - palette[0]);
+
+            for (uniform int j = 1; j < 8; ++j)
+            {
+                int dist = abs(val - palette[j]);
+                if (dist < minDist)
+                {
+                    minDist = dist;
+                    bestIdx = j;
+                }
+            }
+            indices |= ((uint64)bestIdx) << (i * 3);
+        }
+    }
+    else
+    {
+        // 6-value interpolation mode with explicit -127/127
+        int8 palette[8];
+        palette[0] = ep0;
+        palette[1] = ep1;
+        for (uniform int i = 2; i < 6; ++i)
+        {
+            int val = ((6 - i) * (int)ep0 + (i - 1) * (int)ep1) / 5;
+            palette[i] = clamp(val, -127, 127);
+        }
+        palette[6] = -127;
+        palette[7] = 127;
+
+        for (uniform int i = 0; i < 16; ++i)
+        {
+            int8 val = (block[i] == -128) ? -127 : block[i];
+            int bestIdx = 0;
+            int minDist = abs(val - palette[0]);
+
+            for (uniform int j = 1; j < 8; ++j)
+            {
+                int dist = abs(val - palette[j]);
+                if (dist < minDist)
+                {
+                    minDist = dist;
+                    bestIdx = j;
+                }
+            }
+            indices |= ((uint64)bestIdx) << (i * 3);
+        }
+    }
+
+    // Pack endpoints and indices - preserve signed bit pattern
+    uint8 uep0 = ep0 & 0xFF;
+    uint8 uep1 = ep1 & 0xFF;
+    data[0] = uep0 | (uep1 << 8) | ((uint32)(indices & 0xFFFF) << 16);
+    data[1] = (uint32)(indices >> 16);
+}
+
+export void CompressBlocksBC4_snorm_ispc(uniform rgba_surface src[], uniform uint8 dst[])
+{
+    for (uniform int yy = 0; yy<src->height/4; yy++)
+    foreach (xx = 0 ... src->width/4)
+    {
+        int8 block[16];
+        uint32 data[2];
+        load_block_r_8bit_snorm(block, src, xx, yy);
+        CompressBlockBC4_SNORM_alpha(block, data);
+        store_data(dst, src->width, xx, yy, data, 2);
+    }
+}
+
+export void CompressBlocksBC5_snorm_ispc(uniform rgba_surface src[], uniform uint8 dst[])
+{
+    for (uniform int yy = 0; yy<src->height/4; yy++)
+    foreach (xx = 0 ... src->width/4)
+    {
+        int8 block[32];
+        uint32 data[4];
+        load_block_rg_8bit_snorm(block, src, xx, yy);
+        CompressBlockBC4_SNORM_alpha(block, &data[0]);
+        CompressBlockBC4_SNORM_alpha(&block[16], &data[2]);
+        store_data(dst, src->width, xx, yy, data, 4);
+    }
 }
 
 ///////////////////////////////////////////////////////////
