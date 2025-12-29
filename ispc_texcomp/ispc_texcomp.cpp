@@ -1705,7 +1705,7 @@ void CompressBlocksBC7(const rgba_surface* src, uint8_t* dst, bc7_enc_settings* 
     // Check if we should use forced mode for conformance testing
     // We detect BC7 formats by checking if this is being called for BC7
     // For now, we'll add a flag or use a simple detection
-    static bool useConformanceMode = true; // Enable forced mode for testing
+    static bool useConformanceMode = false; // Enable forced mode for testing
 
     if (useConformanceMode) {
         CompressBlocksBC7_ForcedMode(src, dst, settings);
